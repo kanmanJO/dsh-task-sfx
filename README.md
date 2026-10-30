@@ -12,6 +12,8 @@
 
 English: a random chime every time a reply finishes, plus a one-shot reminder if you stay quiet for a configurable number of seconds afterwards. Two independent switches; everything persists under `<DSH home>/task-sfx/`.
 
+![设置面板：两个开关、任务完成音效池、提醒音效与间隔设置](docs/screenshot.png)
+
 ## 写在前面
 
 > 可以用来提醒自己任务完成 —— 每轮回复结束响一声，就知道这边结束了。
