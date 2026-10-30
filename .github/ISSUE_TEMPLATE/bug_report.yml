@@ -1,0 +1,61 @@
+name: Bug report
+description: 报告一个可复现的问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先搜一下已有 issue，并把**复现步骤**写清楚——这个插件的行为跟「什么时候响、什么时候不响」强相关，缺了步骤很难定位。
+  - type: input
+    id: version
+    attributes:
+      label: 插件版本
+      description: package.json 里的 version，或安装时的来源（npm / 目录路径）
+      placeholder: 1.1.0
+    validations:
+      required: true
+  - type: input
+    id: dsh
+    attributes:
+      label: DSH 版本
+      description: 关于页面里显示的 DeepSeek Harness 版本
+      placeholder: 0.2.1-rc.3
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 出问题的部分
+      options:
+        - 任务完成音效（A）
+        - 提醒音效（B）与倒计时
+        - 设置面板 / 侧边栏入口
+        - 音频导入 / 删除 / 试听
+        - 重启后数据丢失
+        - 其它
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从「打开面板」开始写，包括你输入的间隔秒数、两个开关的状态。
+      placeholder: |
+        1. A 开、B 开、间隔 30 秒
+        2. 发一条消息，等回复结束
+        3. 立即再发一条消息
+        4. 等 30 秒 → 仍然响了一次（预期不响）
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关信息
+      description: 浏览器控制台报错、`<DSH home>/task-sfx/config.json` 内容（注意先删掉个人路径）、`npm test` 输出。
+      render: shell
