@@ -1,0 +1,73 @@
+{
+  "name": "dsh-task-sfx",
+  "version": "1.1.0",
+  "type": "module",
+  "description": "每次回复结束随机播一个完成音效，静默超时再补响一次提醒；两个独立开关、音效池与间隔全部持久化。Random completion chime plus a one-shot reminder for DeepSeek Harness.",
+  "license": "MIT",
+  "sideEffects": [
+    "./client.js"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/en.json",
+    "locale/zh.json",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "sound",
+    "chime",
+    "notification",
+    "reminder",
+    "audio"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.3"
+  },
+  "scripts": {
+    "check": "node --check index.js && node --check client.js",
+    "test": "node test/smoke.mjs",
+    "repo": "node scripts/set-repo.mjs",
+    "prepack": "npm run check && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kanmanJO/dsh-task-sfx.git"
+  },
+  "homepage": "https://github.com/kanmanJO/dsh-task-sfx#readme",
+  "bugs": {
+    "url": "https://github.com/kanmanJO/dsh-task-sfx/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  }
+}

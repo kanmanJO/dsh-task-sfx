@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Task sounds & reminder",
+    "description": "A random chime from your own sound pool plays each time a reply ends, and a reminder sound plays once if you stay quiet for five minutes afterwards. Imported sounds and the on/off switch are stored on disk, so they survive a restart."
+  }
+}
