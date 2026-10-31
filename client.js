@@ -272,7 +272,9 @@ window.__ModuleLoader__.load({
 
     /** 上传一个文件：请求体就是字节，文件名放在头里（URI 编码）。 */
     async function postFile(file, slot) {
-      const response = await fetch(`${API}/upload?slot=${slot === 'b' ? 'b' : 'pool'}`, {
+      // 三个槽各走各的：c 一定要带上 slot=c，否则 Host 会按默认的 A 池收下。
+      const target = slot === 'b' ? 'b' : slot === 'c' ? 'c' : 'pool'
+      const response = await fetch(`${API}/upload?slot=${target}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/octet-stream',

@@ -3,6 +3,12 @@
 All notable changes to `dsh-task-sfx` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] — 2026-10-31
+
+### Fixed
+
+- **C 池导入落到 A 池**：`postFile()` 里把槽位写成了 `slot === 'b' ? 'b' : 'pool'`，于是 `slot: "c"` 被当成 A 上传。三个槽位现在各走各的（`b` / `c` / `pool`）。
+
 ## [1.2.0] — 2026-10-31
 
 ### Added
