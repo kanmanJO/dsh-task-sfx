@@ -3,17 +3,24 @@
 All notable changes to `dsh-task-sfx` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-10-31
 
 ### Added
 
+- **授权提醒音效（C）**：新增第三个独立开关与音效池 C。Host 订阅 waterfall 事件 `approval/request`，在 DSH 弹审批请求的那一刻推一条 `approval` 事件；Client 收到后从 C 池随机播一个。监听器包在 `try/catch` 里并原样 `return next()`，不影响审批结果，也不会碰 B 的倒计时。
+- C 池支持批量导入、列表展示、试听与删除（`POST /upload?slot=c`、`POST /delete` 的 `slot: "c"`、`GET /state` 里的 `poolC`）。
 - 开源仓库配套：`CONTRIBUTING.md`、GitHub Actions CI（Node 22.19 / 24 两版跑语法检查、冒烟测试、打包自检）、issue 与 PR 模板、`.editorconfig`、`.gitattributes`。
-- `test/smoke.mjs`：18 项冒烟测试，用真 http 服务器打插件自己的路由，覆盖开关、秒数夹取、`turn/end` 倒计时、用户动作作废、子代理过滤、上传/回放/Range/删除、B 槽替换、旧配置与 BOM 迁移。
+- `test/smoke.mjs`：24 项冒烟测试，用真 http 服务器打插件自己的路由，覆盖开关、秒数夹取、`turn/end` 倒计时、用户动作作废、子代理过滤、上传/回放/Range/删除、B 槽替换、C 池与审批触发、旧配置与 BOM 迁移。
 - `scripts/set-repo.mjs`：`npm run repo -- <github-username>` 一键把 `repository` / `homepage` / `bugs` 三个占位字段换成真实地址。
+
+### Changed
+
+- `POST /toggle` 的 `slot` 接受 `"a" | "b" | "c"`；非法值的 400 文案改为 `slot must be "a", "b" or "c"`。
+- 旧配置里的单个 `enabled` 仍然只迁移到 A 与 B —— C 默认关着，交给用户自己开。
 
 ### Fixed
 
-- 上传成功时推送的 `state` 事件还带着已废弃的 `enabled` 字段，改为 `enabledA` / `enabledB`，与其它事件负载保持一致。
+- 上传成功时推送的 `state` 事件还带着已废弃的 `enabled` 字段，改为 `enabledA` / `enabledB` / `enabledC`，与其它事件负载保持一致。
 
 ## [1.1.0] — 2026-10-30
 

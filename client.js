@@ -39,10 +39,17 @@ window.__ModuleLoader__.load({
         switchB: 'Reminder (B)',
         switchBHintOn: 'Plays once if you stay quiet for {sec} after a reply ends.',
         switchBHintOff: 'No reminder, and no countdown is started at all.',
+        switchC: 'Approval chime (C)',
+        switchCHintOn: 'Plays one sound at random the moment DSH asks you to approve an action.',
+        switchCHintOff: 'Silent when an approval is requested. The pool and its files are kept.',
         poolTitle: 'Completion chimes (sound A)',
         poolHint: 'Every time a reply ends, one of these plays at random.',
         poolImport: 'Import audio',
         poolEmpty: 'No chimes yet. Import two or three files and one of them plays at random.',
+        poolCTitle: 'Approval chimes (sound C)',
+        poolCHint: 'When DSH asks you to approve something, one of these plays at random.',
+        poolCImport: 'Import audio',
+        poolCEmpty: 'No approval chimes yet. Import a couple of files and one of them plays at random.',
         reminderTitle: 'Reminder (sound B)',
         reminderHint:
           'If you send nothing, open no new conversation and start no new task for {sec} after a reply ends, this plays once.',
@@ -60,7 +67,7 @@ window.__ModuleLoader__.load({
         countdown: 'Reminder in {time}',
         countdownHint: 'Any new message, task or conversation cancels it.',
         idleHint: 'The countdown starts when a reply ends and fires at most once per task.',
-        idleSilent: 'Both switches are off, so nothing will play.',
+        idleSilent: 'All three switches are off, so nothing will play.',
         uploading: 'Uploading…',
         uploadFailed: 'Upload failed: {error}',
         saveFailed: 'Could not save: {error}',
@@ -85,10 +92,17 @@ window.__ModuleLoader__.load({
         switchB: '提醒音效（B）',
         switchBHintOn: '回复结束后 {sec} 没有任何动静，补响一次提醒。',
         switchBHintOff: '不播提醒，也不会开始倒计时。',
+        switchC: '授权提醒音效（C）',
+        switchCHintOn: 'DSH 需要你授权的那一刻，从下面的音效池里随机播一个。',
+        switchCHintOff: '需要授权时不播，音效池与文件都保留。',
         poolTitle: '任务完成音效池（音效 A）',
         poolHint: '每次回复结束，从下面这些里随机播一个。',
         poolImport: '批量导入音频',
         poolEmpty: '还没有音效。导入两三个文件，之后会随机播其中一个。',
+        poolCTitle: '授权提醒音效池（音效 C）',
+        poolCHint: 'DSH 要求你授权的时候，从下面这些里随机播一个。',
+        poolCImport: '批量导入音频',
+        poolCEmpty: '还没有授权音效。导入两三个文件，之后会随机播其中一个。',
         reminderTitle: '提醒音效（音效 B）',
         reminderHint: '回复结束后 {sec} 内没有新消息、也没有新任务/新对话，就播这一次。',
         reminderImport: '选择提醒音效',
@@ -104,7 +118,7 @@ window.__ModuleLoader__.load({
         countdown: '提醒将在 {time} 后播放',
         countdownHint: '期间发新消息、开新对话或起新任务都会取消。',
         idleHint: '回复结束才开始倒计时，同一次任务最多响一次。',
-        idleSilent: '两个开关都关着，什么都不会播。',
+        idleSilent: '三个开关都关着，什么都不会播。',
         uploading: '上传中…',
         uploadFailed: '上传失败：{error}',
         saveFailed: '保存失败：{error}',
@@ -324,11 +338,20 @@ window.__ModuleLoader__.load({
       return true
     }
 
+    /** C 池随机一个：DSH 需要授权时用。 */
+    function playRandomFromPoolC() {
+      const state = store.state
+      if (state === null || !Array.isArray(state.poolC) || state.poolC.length === 0) return false
+      playItem(state.poolC[Math.floor(Math.random() * state.poolC.length)])
+      return true
+    }
+
     /**
      * 常驻播放引擎。
      *
      * 每秒问 Host 一次「上次序号之后发生了什么」：
      *   - `task-end`：随机播一个 A 池音效，并按 Host 给的 deadline 起倒计时；
+     *   - `approval`：DSH 需要授权，随机播一个 C 池音效；
      *   - `activity`：用户有新消息/新任务/新对话，倒计时立刻作废；
      *   - `state`：开关或音效列表变了，重新拉一次快照。
      * 倒计时到点播一次 B，然后不再重排 —— 同一次任务只响一次。
@@ -405,6 +428,11 @@ window.__ModuleLoader__.load({
           if (store.state.enabledA) playRandomFromPool()
           if (store.state.enabledB) armReminder(event.data && event.data.deadline)
           else clearReminder()
+          return
+        }
+        if (event.type === 'approval') {
+          // 授权提醒和 B 的倒计时无关：响一声就好，别去动 reminding 计时器。
+          if (store.state !== null && store.state.enabledC) playRandomFromPoolC()
           return
         }
         if (event.type === 'activity') {
@@ -893,7 +921,7 @@ window.__ModuleLoader__.load({
             if (files.length > 0 && typeof onPick === 'function') onPick(files, slot)
           },
         }),
-        slot === 'b' ? translate('reminderImport') : translate('poolImport'),
+        slot === 'b' ? translate('reminderImport') : slot === 'c' ? translate('poolCImport') : translate('poolImport'),
       )
     }
 
@@ -936,7 +964,10 @@ window.__ModuleLoader__.load({
           : 300
       const enabledA = snapshot !== null && snapshot !== undefined ? Boolean(snapshot.enabledA) : false
       const enabledB = snapshot !== null && snapshot !== undefined ? Boolean(snapshot.enabledB) : false
+      const enabledC = snapshot !== null && snapshot !== undefined ? Boolean(snapshot.enabledC) : false
       const pool = snapshot !== null && snapshot !== undefined && Array.isArray(snapshot.pool) ? snapshot.pool : []
+      const poolC =
+        snapshot !== null && snapshot !== undefined && Array.isArray(snapshot.poolC) ? snapshot.poolC : []
       const reminder = snapshot !== null && snapshot !== undefined ? snapshot.reminder : null
       const interactive = !busy && phase !== 'loading'
 
@@ -947,13 +978,14 @@ window.__ModuleLoader__.load({
         }
       }
 
-      // slot: 'a' 完成音效，'b' 提醒音效 —— 两个开关互不牵连。
+      // slot: 'a' 完成音效，'b' 提醒音效，'c' 授权提醒 —— 三个开关互不牵连。
       const toggle = async (slot) => {
         if (!interactive) return
         setBusy(true)
         setNote(null)
         try {
-          adopt(await postJson('toggle', { slot, enabled: slot === 'b' ? !enabledB : !enabledA }))
+          const next = slot === 'b' ? !enabledB : slot === 'c' ? !enabledC : !enabledA
+          adopt(await postJson('toggle', { slot, enabled: next }))
         } catch (error) {
           setNote({ kind: 'error', text: translate('saveFailed', { error: describe(error) }) })
         } finally {
@@ -1097,7 +1129,7 @@ window.__ModuleLoader__.load({
         ? translate('uploading')
         : armed
           ? translate('countdown', { time: formatClock(remaining) })
-          : enabledA || enabledB
+          : enabledA || enabledB || enabledC
             ? translate('idleHint')
             : translate('idleSilent')
       const statusDot = armed
@@ -1130,7 +1162,7 @@ window.__ModuleLoader__.load({
       }
 
       const body = []
-      // 头部：标题 + 两个互不牵连的开关
+      // 头部：标题 + 三个互不牵连的开关
       body.push(
         h(
           'div',
@@ -1144,6 +1176,7 @@ window.__ModuleLoader__.load({
           { style: S.gates, key: 'gates' },
           gate('a', enabledA, 'switchA', 'switchAHintOn', 'switchAHintOff'),
           gate('b', enabledB, 'switchB', 'switchBHintOn', 'switchBHintOff'),
+          gate('c', enabledC, 'switchC', 'switchCHintOn', 'switchCHintOff'),
         ),
       )
       // 状态条：倒计时 / 说明
@@ -1219,6 +1252,40 @@ window.__ModuleLoader__.load({
                   onPreview: preview,
                   onRemove: (target) => remove(target, 'b'),
                 }),
+          ),
+        ),
+      )
+      // C 池
+      body.push(
+        h(
+          'section',
+          { style: S.card, key: 'poolC' },
+          h(
+            'div',
+            { style: S.cardHead },
+            h(
+              'div',
+              { style: { minWidth: 0 } },
+              h('h2', { style: S.cardTitle }, translate('poolCTitle')),
+              h('p', { style: S.cardHint }, translate('poolCHint')),
+            ),
+            h(ImportButton, { slot: 'c', multiple: true, busy: !interactive, onPick: upload }),
+          ),
+          h(
+            'div',
+            { style: S.cardBody },
+            poolC.length === 0
+              ? h('div', { style: S.empty }, translate('poolCEmpty'))
+              : poolC.map((item, index) =>
+                  h(SoundRow, {
+                    key: item.id,
+                    item,
+                    index,
+                    busy: !interactive,
+                    onPreview: preview,
+                    onRemove: (target) => remove(target, 'c'),
+                  }),
+                ),
           ),
         ),
       )

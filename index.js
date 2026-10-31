@@ -131,6 +131,10 @@ function normalize(input) {
   const pool = Array.isArray(source.pool)
     ? source.pool.map(normalizeItem).filter((item) => item !== null)
     : []
+  // C 池：需要授权时随机播的那一组。老配置里没有这个键，读出来就是空池。
+  const poolC = Array.isArray(source.poolC)
+    ? source.poolC.map(normalizeItem).filter((item) => item !== null)
+    : []
   // 两个开关各管一路：A = 回复结束的完成音效，B = 静默超时的提醒。
   // 老版本只存一个 enabled，读到时按「两个都跟着它」迁移，用户升级后行为不变。
   const legacy = typeof source.enabled === 'boolean' ? source.enabled : null
@@ -144,8 +148,11 @@ function normalize(input) {
   return {
     enabledA: Boolean(typeof source.enabledA === 'boolean' ? source.enabledA : legacy),
     enabledB: Boolean(typeof source.enabledB === 'boolean' ? source.enabledB : legacy),
+    // C 没有历史包袱：老配置里根本没有这个键，默认关着，不替用户擅自开始响。
+    enabledC: Boolean(typeof source.enabledC === 'boolean' ? source.enabledC : null),
     seconds: normalizeSeconds(legacySeconds, defaultSeconds),
     pool: pool.slice(0, MAX_POOL),
+    poolC: poolC.slice(0, MAX_POOL),
     reminder: normalizeItem(source.reminder),
   }
 }
@@ -214,10 +221,12 @@ function snapshot() {
   return {
     enabledA: state.enabledA,
     enabledB: state.enabledB,
+    enabledC: state.enabledC,
     reminderSeconds: state.seconds,
     secondsMin: MIN_SECONDS,
     secondsMax: MAX_SECONDS,
     pool: state.pool,
+    poolC: state.poolC,
     reminder: state.reminder,
     pending:
       pending === null
@@ -325,6 +334,8 @@ function findItem(id) {
   const state = readState()
   const found = state.pool.find((item) => item.id === id)
   if (found !== undefined) return found
+  const foundC = state.poolC.find((item) => item.id === id)
+  if (foundC !== undefined) return foundC
   if (state.reminder !== null && state.reminder.id === id) return state.reminder
   return null
 }
@@ -389,7 +400,8 @@ function serveAudio(req, res, rawId) {
 
 /** 上传：请求体就是原始字节，文件名走 `x-sfx-name`（URI 编码过）。 */
 async function handleUpload(req, url) {
-  const slot = url.searchParams.get('slot') === 'b' ? 'b' : 'pool'
+  const rawSlot = url.searchParams.get('slot')
+  const slot = rawSlot === 'b' ? 'b' : rawSlot === 'c' ? 'c' : 'pool'
   const header = req.headers['x-sfx-name']
   let name = ''
   try {
@@ -426,13 +438,15 @@ async function handleUpload(req, url) {
   let next
   if (slot === 'pool') {
     next = { ...state, pool: [...state.pool, item].slice(0, MAX_POOL) }
+  } else if (slot === 'c') {
+    next = { ...state, poolC: [...state.poolC, item].slice(0, MAX_POOL) }
   } else {
     // B 只有一个：换新的就把旧的连文件一起扔掉，不留下谁也不认领的字节。
     if (state.reminder !== null) removeFile(state.reminder)
     next = { ...state, reminder: item }
   }
   writeState(next)
-  pushEvent('state', { enabledA: next.enabledA, enabledB: next.enabledB })
+  pushEvent('state', { enabledA: next.enabledA, enabledB: next.enabledB, enabledC: next.enabledC })
   return item
 }
 
@@ -471,16 +485,17 @@ async function handleRoute(req, res) {
       }
       const body = await readJsonBody(req)
       const state = readState()
-      const key = body.slot === 'b' ? 'enabledB' : body.slot === 'a' ? 'enabledA' : null
+      const key =
+        body.slot === 'b' ? 'enabledB' : body.slot === 'a' ? 'enabledA' : body.slot === 'c' ? 'enabledC' : null
       if (key === null) {
-        sendJson(res, 400, { error: 'slot must be "a" or "b"' })
+        sendJson(res, 400, { error: 'slot must be "a", "b" or "c"' })
         return
       }
       const enabled = body.enabled === undefined ? !state[key] : Boolean(body.enabled)
       writeState({ ...state, [key]: enabled })
       // B 一动就作废旧倒计时：刚打开时不该替「上一次任务」补响；关掉就更不该再响。
       if (key === 'enabledB') pending = null
-      pushEvent('state', { enabledA: state.enabledA, enabledB: state.enabledB, [key]: enabled })
+      pushEvent('state', { enabledA: state.enabledA, enabledB: state.enabledB, enabledC: state.enabledC, [key]: enabled })
       sendJson(res, 200, snapshot())
       return
     }
@@ -502,7 +517,7 @@ async function handleRoute(req, res) {
       writeState({ ...state, seconds })
       // 倒计时正在走的话按新时长重算：面板上显示的和真正会响的那一刻必须一致。
       if (pending !== null) pending.deadline = pending.at + seconds * 1000
-      pushEvent('state', { enabledA: state.enabledA, enabledB: state.enabledB, seconds })
+      pushEvent('state', { enabledA: state.enabledA, enabledB: state.enabledB, enabledC: state.enabledC, seconds })
       sendJson(res, 200, snapshot())
       return
     }
@@ -530,13 +545,17 @@ async function handleRoute(req, res) {
       if (body.slot === 'b') {
         if (state.reminder !== null) removeFile(state.reminder)
         next = { ...state, reminder: null }
+      } else if (body.slot === 'c') {
+        const removedC = state.poolC.filter((item) => item.id === body.id)
+        for (const item of removedC) removeFile(item)
+        next = { ...state, poolC: state.poolC.filter((item) => item.id !== body.id) }
       } else {
         const removed = state.pool.filter((item) => item.id === body.id)
         for (const item of removed) removeFile(item)
         next = { ...state, pool: state.pool.filter((item) => item.id !== body.id) }
       }
       writeState(next)
-      pushEvent('state', { enabledA: next.enabledA, enabledB: next.enabledB })
+      pushEvent('state', { enabledA: next.enabledA, enabledB: next.enabledB, enabledC: next.enabledC })
       sendJson(res, 200, snapshot())
       return
     }
@@ -566,7 +585,7 @@ async function handleRoute(req, res) {
   }
 }
 
-/** 插件入口：一条 API 路由 + 两个会话事件监听。 */
+/** 插件入口：一条 API 路由 + 三个事件监听（会话、审批）。 */
 export function apply(ctx, config) {
   // 配置里的间隔只是初值；面板改过之后以 config.json 为准。老配置键 reminderMinutes（分钟）也认。
   const conf = config !== null && typeof config === 'object' ? config : {}
@@ -593,5 +612,22 @@ export function apply(ctx, config) {
     if (header === null || typeof header !== 'object') return
     if (header.parentSession !== undefined || header.origin === 'subagent') return
     clearPending('new-session')
+  })
+
+  // 「需要授权」的那一下：审批请求刚出现就告诉页面响一声 C。
+  // 这是 waterfall 事件，监听器必须原样 return next() 把决定权交回 DSH；
+  // 提醒本身包在 try/catch 里，任何失败都不允许影响审批流程。
+  ctx.on('approval/request', (req, next) => {
+    try {
+      const state = readState()
+      if (state.enabledC && state.poolC.length > 0) {
+        pushEvent('approval', {
+          toolName: req !== null && typeof req === 'object' && typeof req.toolName === 'string' ? req.toolName : '',
+        })
+      }
+    } catch {
+      /* 提醒失败绝不能影响审批本身 */
+    }
+    return next()
   })
 }

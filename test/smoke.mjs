@@ -88,6 +88,26 @@ function fire(type, data, session = rootSession) {
 function fireTurnEnd(reason = 'completed', session = rootSession) {
   fire('turn/end', { turn: 1, reason: { kind: reason } }, session)
 }
+/**
+ * 模拟 DSH 发起一次审批请求。
+ *
+ * `approval/request` 是 waterfall 事件：监听器拿到 (req, next)，必须 return next()
+ * 把决定权交回 DSH。这里顺便统计 next() 被调用的次数与透传的结果。
+ */
+async function fireApproval(toolName = 'pwsh') {
+  const handlers = listeners.get('approval/request') ?? []
+  let nextCalls = 0
+  const results = []
+  for (const handler of handlers) {
+    results.push(
+      await handler({ agent: { id: 's-live' }, toolName }, () => {
+        nextCalls += 1
+        return Promise.resolve('allowed-once')
+      }),
+    )
+  }
+  return { results, nextCalls }
+}
 const listEvents = async (since = 0) => (await getJson(`/events?since=${since}`)).body
 
 const WAV = Buffer.concat([
@@ -110,13 +130,15 @@ try {
   const initial = (await getState()).body
   assert.equal(initial.enabledA, false)
   assert.equal(initial.enabledB, false)
+  assert.equal(initial.enabledC, false)
   assert.equal(initial.reminderSeconds, 300)
   assert.equal(initial.secondsMin, 1)
   assert.equal(initial.secondsMax, 43_200)
   assert.deepEqual(initial.pool, [])
+  assert.deepEqual(initial.poolC, [])
   assert.equal(initial.reminder, null)
   assert.equal(initial.pending, null)
-  pass('GET /state 返回默认快照（两个开关关、300 秒、空池）')
+  pass('GET /state 返回默认快照（三个开关关、300 秒、空池）')
 
   /* ---- 参数与错误分支 ---- */
   assert.equal((await getJson('/nope')).status, 404)
@@ -138,6 +160,16 @@ try {
   assert.equal(flipB.enabledB, false)
   assert.equal(flipB.enabledA, true)
   pass('A / B 两个开关互不牵连，也支持显式 enabled')
+
+  /* ---- C 也是独立开关 ---- */
+  const toggleC = (await postJson('/toggle', { slot: 'c' })).body
+  assert.equal(toggleC.enabledC, true)
+  assert.equal(toggleC.enabledA, true)
+  assert.equal(toggleC.enabledB, false)
+  const flipC = (await postJson('/toggle', { slot: 'c', enabled: false })).body
+  assert.equal(flipC.enabledC, false)
+  assert.equal(flipC.enabledA, true, '关 C 不该顺手关掉 A')
+  pass('C 开关与 A/B 互不牵连，同样支持显式 enabled')
 
   /* ---- 间隔以秒为单位，带夹取 ---- */
   assert.equal((await postJson('/seconds', { seconds: 12 })).body.reminderSeconds, 12)
@@ -254,6 +286,52 @@ try {
   assert.ok(!existsSync(join(soundsDir, `${firstBItem.id}.mp3`)), '换掉的 B 文件应当被清理')
   pass('B 槽换新文件时旧文件被删除')
 
+  /* ---- C 池：导入、触发、删除 ---- */
+  const uploadC = await fetch(`${base}/upload?slot=c`, {
+    method: 'POST',
+    headers: { 'content-type': 'audio/mpeg', 'x-sfx-name': 'approval-1.mp3' },
+    body: WAV,
+  })
+  assert.equal(uploadC.status, 200)
+  const uploadedC = (await uploadC.json()).poolC
+  assert.equal(uploadedC.length, 1)
+  assert.equal(uploadedC[0].name, 'approval-1.mp3')
+  assert.ok(existsSync(join(soundsDir, `${uploadedC[0].id}.mp3`)))
+  pass('C 池支持批量导入并单独登记（不混进 A 池）')
+
+  /* C 关着：审批请求静默，但必须把决定原样交回 DSH。 */
+  await postJson('/toggle', { slot: 'c', enabled: false })
+  const seqBeforeOff = (await getState()).body.seq
+  const silentApproval = await fireApproval('pwsh')
+  assert.equal(silentApproval.nextCalls, 1, '监听器必须调用 next()')
+  assert.deepEqual(silentApproval.results, ['allowed-once'], '审批结果必须原样透传')
+  assert.equal((await getState()).body.seq, seqBeforeOff, 'C 关着时不该推任何事件')
+  pass('C 关着时审批请求静默，且审批结果原样透传')
+
+  /* C 开着：审批请求刚出现就推一条 approval 事件。 */
+  await postJson('/toggle', { slot: 'c', enabled: true })
+  const loudApproval = await fireApproval('pwsh')
+  assert.deepEqual(loudApproval.results, ['allowed-once'])
+  const approvalEvent = (await listEvents()).events.filter((event) => event.type === 'approval').pop()
+  assert.ok(approvalEvent !== undefined, 'C 开着时应当推送 approval 事件')
+  assert.equal(approvalEvent.data.toolName, 'pwsh')
+  pass('审批请求出现的那一刻推送 approval 事件，并带上工具名')
+
+  /* 授权提醒只响一声，不该动 B 的倒计时。 */
+  await postJson('/toggle', { slot: 'b', enabled: true })
+  fireTurnEnd('completed')
+  const armedBefore = (await getState()).body.pending
+  assert.ok(armedBefore !== null)
+  await fireApproval('pwsh')
+  assert.deepEqual((await getState()).body.pending, armedBefore, '授权提醒不该重置或清掉 B 的倒计时')
+  pass('授权提醒不影响 B 的倒计时')
+
+  /* 删除 C 池条目 */
+  const removedC = (await postJson('/delete', { slot: 'c', id: uploadedC[0].id })).body
+  assert.equal(removedC.poolC.length, 0)
+  assert.ok(!existsSync(join(soundsDir, `${uploadedC[0].id}.mp3`)))
+  pass('删除 C 池条目会同时清掉清单与磁盘文件')
+
   /* ---- 删除 ---- */
   const afterDelete = (await postJson('/delete', { slot: 'pool', id: uploaded[0].id })).body
   assert.equal(afterDelete.pool.length, 0)
@@ -267,6 +345,7 @@ try {
   const migrated = (await getState()).body
   assert.equal(migrated.enabledA, true)
   assert.equal(migrated.enabledB, true)
+  assert.equal(migrated.enabledC, false, '旧配置里的 enabled 不该顺手把 C 打开')
   assert.equal(migrated.reminderSeconds, 30)
   pass('旧的 enabled / minutes 自动迁移成两个开关与秒，且能读带 BOM 的文件')
   /* 迁移结果要能落盘：随便触发一次写，文件里就该只剩新字段。 */
