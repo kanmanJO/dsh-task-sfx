@@ -317,6 +317,23 @@ try {
   assert.equal(approvalEvent.data.toolName, 'pwsh')
   pass('审批请求出现的那一刻推送 approval 事件，并带上工具名')
 
+  /* 「要你做出选择」的那一下也算：提问 / 退出计划模式都会推 approval 事件。 */
+  const seqBeforeChoice = (await getState()).body.seq
+  fire('tool/call', { turn: 1, step: 1, callId: 'call-ask', name: 'ask_user_question', arguments: '{}' })
+  const choiceEvent = (await listEvents()).events.filter((event) => event.type === 'approval').pop()
+  assert.ok(choiceEvent !== undefined, '提问工具被调用时应当推送 approval 事件')
+  assert.equal(choiceEvent.data.toolName, 'ask_user_question')
+  assert.equal(choiceEvent.data.kind, 'choice')
+  pass('DSH 让你做选择（ask_user_question）时也响 C')
+
+  fire('tool/call', { turn: 1, step: 1, callId: 'call-plan', name: 'exit_plan_mode', arguments: '{}' })
+  assert.equal((await getState()).body.seq, seqBeforeChoice + 2, 'exit_plan_mode 同样算一次选择')
+  pass('退出计划模式的确认同样触发 C')
+
+  fire('tool/call', { turn: 1, step: 1, callId: 'call-read', name: 'read', arguments: '{}' })
+  assert.equal((await getState()).body.seq, seqBeforeChoice + 2, '普通工具不该触发提醒')
+  pass('普通工具调用不触发 C')
+
   /* 授权提醒只响一声，不该动 B 的倒计时。 */
   await postJson('/toggle', { slot: 'b', enabled: true })
   fireTurnEnd('completed')

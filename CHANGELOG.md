@@ -3,6 +3,17 @@
 All notable changes to `dsh-task-sfx` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2026-10-31
+
+### Changed
+
+- **C 的触发条件扩成「要你出面」的两种情况**：除了原有的审批请求（`approval/request`），现在 `ask_user_question`（DSH 停下来向你提问）与 `exit_plan_mode`（让你确认/修改计划）被调用的那一刻也会响 C。两条路统一走 `notifyAttention()`，事件负载多一个 `kind` 字段（`"approval"` / `"choice"`）。
+- 面板与 README 的 C 相关文案改为「授权 / 选择」，并说明 C 不会替你回答、也不会改变审批结果。
+
+### Added
+
+- `test/smoke.mjs`：新增 3 项断言（提问工具触发、退出计划模式触发、普通工具不触发），共计 27 项。
+
 ## [1.2.1] — 2026-10-31
 
 ### Fixed

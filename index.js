@@ -48,6 +48,12 @@ const MIN_SECONDS = 1
 const MAX_SECONDS = 43_200
 
 /**
+ * C 的触发条件里「要你做出选择」那一半：DSH 把球踢回给人时用到的工具。
+ * 授权请求走的是 approval/request 事件，不在这个名单里。
+ */
+const CHOICE_TOOLS = new Set(['ask_user_question', 'exit_plan_mode'])
+
+/**
  * 插件配置（cordis.patch.yml）里写的间隔，只当作「还没在面板里设过」时的初值。
  * 一旦面板写过一次，config.json 里的值就是唯一真相。
  */
@@ -212,6 +218,16 @@ function clearPending(reason) {
   pushEvent('activity', { reason })
 }
 
+/**
+ * C 的通知：DSH 要你授权（kind='approval'）或者要你做出选择（kind='choice'）时，
+ * 让页面从 C 池里随机响一声。开关没开、池子空着就什么都不做。
+ */
+function notifyAttention(toolName, kind) {
+  const state = readState()
+  if (!state.enabledC || state.poolC.length === 0) return
+  pushEvent('approval', { toolName: typeof toolName === 'string' ? toolName : '', kind })
+}
+
 /** 当前给页面的快照：开关、提醒时长、两个池、待触发的倒计时、事件序号。 */
 function snapshot() {
   const state = readState()
@@ -302,6 +318,13 @@ function onSessionEvent(session, event) {
       turn: pending === null ? null : pending.turn,
       reason: kind,
     })
+    return
+  }
+
+  // DSH 把球踢回给人：提问 / 让人拍板。工具一被调用就是「他可能需要你了」。
+  if (event.type === 'tool/call') {
+    const name = event.data && typeof event.data.name === 'string' ? event.data.name : ''
+    if (CHOICE_TOOLS.has(name)) notifyAttention(name, 'choice')
     return
   }
 
@@ -614,17 +637,13 @@ export function apply(ctx, config) {
     clearPending('new-session')
   })
 
-  // 「需要授权」的那一下：审批请求刚出现就告诉页面响一声 C。
+  // 「需要你」的那一下：审批请求刚出现就告诉页面响一声 C。
   // 这是 waterfall 事件，监听器必须原样 return next() 把决定权交回 DSH；
   // 提醒本身包在 try/catch 里，任何失败都不允许影响审批流程。
   ctx.on('approval/request', (req, next) => {
     try {
-      const state = readState()
-      if (state.enabledC && state.poolC.length > 0) {
-        pushEvent('approval', {
-          toolName: req !== null && typeof req === 'object' && typeof req.toolName === 'string' ? req.toolName : '',
-        })
-      }
+      const toolName = req !== null && typeof req === 'object' && typeof req.toolName === 'string' ? req.toolName : ''
+      notifyAttention(toolName, 'approval')
     } catch {
       /* 提醒失败绝不能影响审批本身 */
     }
