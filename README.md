@@ -13,7 +13,7 @@
 
 English: a random chime every time a reply finishes, a one-shot reminder if you stay quiet for a configurable number of seconds afterwards, and a chime the moment DSH asks you to approve something or to make a choice. Three independent switches; everything persists under `<DSH home>/task-sfx/`.
 
-![设置面板：三个开关、任务完成音效池、提醒音效与间隔设置](docs/screenshot.png)
+![设置面板：任务完成音效池、提醒音效与间隔设置](https://cdn.jsdelivr.net/npm/dsh-task-sfx/docs/screenshot.png)
 
 ## 写在前面
 

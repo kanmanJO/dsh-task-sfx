@@ -1,6 +1,6 @@
 {
   "name": "dsh-task-sfx",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "type": "module",
   "description": "回复结束随机播一个完成音效，静默超时补响一次提醒，DSH 需要授权时再响一声；三个独立开关、三个音效池与间隔全部持久化。Completion chime, one-shot reminder and an approval chime for DeepSeek Harness.",
   "license": "MIT",
@@ -21,6 +21,7 @@
     "locale/en.json",
     "locale/zh.json",
     "icon.svg",
+    "docs/screenshot.png",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
