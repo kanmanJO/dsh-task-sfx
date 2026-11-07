@@ -3,11 +3,13 @@
 All notable changes to `dsh-task-sfx` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.3.1] — 2026-11-07
+## [1.3.2] — 2026-11-07
 
 ### Fixed
 
 - **npm 页面上的面板截图裂图**：README 里的截图用的是相对路径 `docs/screenshot.png`，而 `docs/` 不在发布包的 `files` 白名单里，npm 渲染 README 时根本取不到这张图。现在截图本身打进包里（顺手压到 76 KB），README 改用 npm CDN 的绝对地址 `https://cdn.jsdelivr.net/npm/dsh-task-sfx/docs/screenshot.png`，npm 与 GitHub 两边都能正常显示。
+
+> 1.3.1 只进过 npm 暂存区（staged、未公开发布），因此版本号直接跳到 1.3.2。
 
 ## [1.3.0] — 2026-10-31
 
